@@ -2,8 +2,9 @@ local M = {}
 
 local state = {
 	sync_group = vim.api.nvim_create_augroup("ScrollSync", { clear = true }),
+	scroll_group = vim.api.nvim_create_augroup("ScrollSyncScroll", { clear = true }),
 	enabled = false,
-	curr_win = nil,
+	buf = {},
 }
 
 M.config = {
@@ -14,116 +15,85 @@ M.config = {
 }
 
 local function is_valid_win(win)
-	return vim.api.nvim_win_is_valid(win) and win ~= nil
+	return win and vim.api.nvim_win_is_valid(win)
 end
 
 local function is_valid_buf(buf)
-	return vim.api.nvim_buf_is_valid(buf) and buf ~= nil
+	return buf and vim.api.nvim_buf_is_valid(buf)
 end
 
 local function buf_get_sorted_wins(buf)
-	local all_wins = vim.api.nvim_list_wins()
-	local buf_wins = {}
-	-- Collect valid windows showing the target buffer
-	for _, win in ipairs(all_wins) do
+	local wins = {}
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
 		if is_valid_win(win) and vim.api.nvim_win_get_buf(win) == buf then
-			table.insert(buf_wins, win)
+			local pos = vim.api.nvim_win_get_position(win)
+			wins[#wins + 1] = {
+				win = win,
+				row = pos[1],
+				col = pos[2],
+			}
 		end
 	end
 
-	-- Sort windows based on position (left to right, top to bottom)
-	table.sort(buf_wins, function(a, b)
-		local pos_a = vim.api.nvim_win_get_position(a)
-		local pos_b = vim.api.nvim_win_get_position(b)
-
-		if pos_a[1] ~= pos_b[1] then
-			return pos_a[1] < pos_b[1]
-		end
-		return pos_a[2] < pos_b[2]
+	table.sort(wins, function(a, b)
+		return a.row == b.row and a.col < b.col or a.row < b.row
 	end)
 
-	return buf_wins
+	-- Extract just the window handles
+	local result = {}
+	for i, entry in ipairs(wins) do
+		result[i] = entry.win
+	end
+	return result
 end
 
-local function get_base_line(ref_win, from)
-	from = from or "top"
-	if from == "top" then
-		return vim.fn.line("w0", ref_win)
-	elseif from == "bottom" then
-		return vim.fn.line("w$", ref_win)
-	end
+local function get_base_line(win, from)
+	return vim.fn.line(from == "top" and "w0" or "w$", win)
 end
 
 local function win_scroll_to_line(win, line, direction)
-	direction = direction or "top"
 	if not is_valid_win(win) then
 		return
 	end
 
-	-- TODO: improve scrolling logic to prevent glitching
 	vim.api.nvim_win_call(win, function()
-		if direction == "top" then
-			vim.cmd(string.format("normal! %dG zt", line))
-		else
-			vim.cmd(string.format("normal! %dG zb", line))
-		end
+		vim.cmd(string.format("normal! %dG %s", line, direction == "top" and "zt" or "zb"))
 	end)
 end
 
 local function align_wins(wins, start_idx, end_idx)
-	local reversed = M.config.reversed
-	local overlap_lines = M.config.overlap_lines
-	local hide_line_number = M.config.hide_line_number
-
+	local config = M.config
 	local iter_dir = end_idx > start_idx and 1 or -1
-	if iter_dir > 0 then
-		for i = start_idx, end_idx, iter_dir do
-			local win = wins[i]
-			local scrolloff = vim.api.nvim_get_option_value("scrolloff", { win = win })
-			scrolloff = scrolloff == -1 and vim.go.scrolloff or scrolloff
-			local offset = 1 + scrolloff - overlap_lines
+	local start = start_idx
+	local finish = end_idx
 
-			if i > start_idx then
-				local ref_win = wins[i - 1]
-				if reversed then
-					local new_line = get_base_line(ref_win, "top") - offset
-					win_scroll_to_line(win, new_line, "bottom")
-				else
-					local new_line = get_base_line(ref_win, "bottom") + offset
-					win_scroll_to_line(win, new_line, "top")
-				end
-			end
+	while start ~= finish + iter_dir do
+		local win = wins[start]
+		local scrolloff = vim.api.nvim_get_option_value("scrolloff", { win = win })
+		scrolloff = scrolloff == -1 and vim.go.scrolloff or scrolloff
+		local offset = 1 + scrolloff - config.overlap_lines
 
-			if hide_line_number == "others" then
-				vim.api.nvim_set_option_value("number", i == start_idx, { win = win })
+		if start ~= start_idx then
+			local ref_win = wins[start - iter_dir]
+			if config.reversed then
+				local new_line = get_base_line(ref_win, iter_dir > 0 and "top" or "bottom")
+					+ (iter_dir > 0 and -offset or offset)
+				win_scroll_to_line(win, new_line, iter_dir > 0 and "bottom" or "top")
 			else
-				vim.api.nvim_set_option_value("number", hide_line_number == "none", { win = win })
+				local new_line = get_base_line(ref_win, iter_dir > 0 and "bottom" or "top")
+					+ (iter_dir > 0 and offset or -offset)
+				win_scroll_to_line(win, new_line, iter_dir > 0 and "top" or "bottom")
 			end
 		end
-	else
-		for i = start_idx, end_idx, iter_dir do
-			local win = wins[i]
-			local scrolloff = vim.api.nvim_get_option_value("scrolloff", { win = win })
-			scrolloff = scrolloff == -1 and vim.go.scrolloff or scrolloff
-			local offset = 1 + scrolloff - overlap_lines
 
-			if i < start_idx then
-				local ref_win = wins[i + 1]
-				if reversed then
-					local new_line = get_base_line(ref_win, "bottom") + offset
-					win_scroll_to_line(win, new_line, "top")
-				else
-					local new_line = get_base_line(ref_win, "top") - offset
-					win_scroll_to_line(win, new_line, "bottom")
-				end
-			end
-
-			if hide_line_number == "others" then
-				vim.api.nvim_set_option_value("number", i == start_idx, { win = win })
-			else
-				vim.api.nvim_set_option_value("number", hide_line_number == "none", { win = win })
-			end
+		local is_set_line_number = config.hide_line_number == "all"
+		if config.hide_line_number == "others" and start == start_idx then
+			is_set_line_number = true
 		end
+		-- Set line numbers based on configuration
+		vim.api.nvim_set_option_value("number", is_set_line_number, { win = win })
+
+		start = start + iter_dir
 	end
 end
 
@@ -149,50 +119,77 @@ local function buf_update_wins(buf)
 			break
 		end
 	end
-	local sorted_wins_length = #sorted_wins
 
-	-- Config opts
-	local reversed = M.config.reversed
+	state.buf.wins = sorted_wins
+	state.buf.curr_win_idx = curr_win_idx
 
-	if curr_win_idx == 1 or curr_win_idx == sorted_wins_length then
-		if reversed then
-			if curr_win_idx == sorted_wins_length then
-				align_wins(sorted_wins, sorted_wins_length, 1)
+	local last_idx = #sorted_wins
+	if curr_win_idx == 1 or curr_win_idx == last_idx then
+		if M.config.reversed then
+			if curr_win_idx == last_idx then
+				align_wins(sorted_wins, last_idx, 1)
 			else
-				align_wins(sorted_wins, 1, sorted_wins_length)
+				align_wins(sorted_wins, 1, last_idx)
 			end
 		else
 			if curr_win_idx == 1 then
-				align_wins(sorted_wins, 1, sorted_wins_length)
+				align_wins(sorted_wins, 1, last_idx)
 			else
-				align_wins(sorted_wins, sorted_wins_length, 1)
+				align_wins(sorted_wins, last_idx, 1)
 			end
 		end
 	else
-		align_wins(sorted_wins, curr_win_idx, sorted_wins_length)
+		align_wins(sorted_wins, curr_win_idx, last_idx)
 		align_wins(sorted_wins, curr_win_idx, 1)
 	end
 end
 
+local function handle_scroll()
+	if state.scroll_timer then
+		state.scroll_timer:stop()
+	end
+
+	state.scroll_timer = vim.defer_fn(function()
+		if state.enabled then
+			local curr_buf = vim.api.nvim_get_current_buf()
+			if is_valid_buf(curr_buf) then
+				local sorted_wins = buf_get_sorted_wins(curr_buf)
+				if #sorted_wins > 1 then
+					local curr_win = vim.api.nvim_get_current_win()
+					-- Only update if we're in a window showing the current buffer
+					for _, win in ipairs(sorted_wins) do
+						if win == curr_win then
+							buf_update_wins(curr_buf)
+							break
+						end
+					end
+				end
+			end
+		end
+		state.scroll_timer = nil
+	end, 16) -- Debounce time of ~1 frame (60fps)
+end
+
 function M.enable()
 	state.enabled = true
-
-	local current_buf = vim.api.nvim_get_current_buf()
-	buf_update_wins(current_buf)
+	buf_update_wins(vim.api.nvim_get_current_buf())
 end
 
 function M.disable()
 	state.enabled = false
+	if state.scroll_timer then
+		state.scroll_timer:stop()
+		state.scroll_timer = nil
+	end
 end
 
 function M.toggle()
 	if state.enabled then
 		M.disable()
-		vim.notify("**Scroll Sync** disabled")
 	else
 		M.enable()
-		vim.notify("**Scroll Sync** enabled")
 	end
+	vim.notify(vim.format("**Scroll Sync** %s", state.enabled and "enabled" or "disabled"))
 end
 
 function M.setup(opts)
@@ -200,25 +197,28 @@ function M.setup(opts)
 		M.config = vim.tbl_deep_extend("force", M.config, opts)
 	end
 
-	vim.api.nvim_create_user_command("ScrollItEnable", M.enable, {
-		desc = "Enable scroll synchronization",
-	})
-	vim.api.nvim_create_user_command("ScrollItDisable", M.disable, {
-		desc = "Disable scroll synchronization",
-	})
-	vim.api.nvim_create_user_command("ScrollItToggle", M.toggle, {
-		desc = "Toggle scroll synchronization",
-	})
+	local commands = {
+		ScrollItEnable = { M.enable, "Enable scroll synchronization" },
+		ScrollItDisable = { M.disable, "Disable scroll synchronization" },
+		ScrollItToggle = { M.toggle, "Toggle scroll synchronization" },
+	}
 
-	local sync_group = state.sync_group
-	vim.api.nvim_create_autocmd({ "WinEnter", "BufWinEnter", "WinScrolled", "WinNew", "WinClosed" }, {
-		group = sync_group,
+	for name, cmd in pairs(commands) do
+		vim.api.nvim_create_user_command(name, cmd[1], { desc = cmd[2] })
+	end
+
+	vim.api.nvim_create_autocmd({ "WinEnter", "BufWinEnter", "WinNew", "WinClosed" }, {
+		group = state.sync_group,
 		callback = function()
 			if state.enabled then
-				local curr_buf = vim.api.nvim_get_current_buf()
-				buf_update_wins(curr_buf)
+				buf_update_wins(vim.api.nvim_get_current_buf())
 			end
 		end,
+	})
+
+	vim.api.nvim_create_autocmd("WinScrolled", {
+		group = state.scroll_group,
+		callback = handle_scroll,
 	})
 
 	if M.config.enabled then
