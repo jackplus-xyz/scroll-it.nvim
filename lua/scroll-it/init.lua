@@ -216,7 +216,7 @@ function M.setup(opts)
 	})
 
 	if M.config.options.enabled then
-		M.enable()
+		vim.defer_fn(M.enable, 100)
 	end
 end
 
