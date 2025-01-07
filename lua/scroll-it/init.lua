@@ -51,7 +51,11 @@ local function win_scroll_to_line(win, line, direction)
 	end
 
 	vim.api.nvim_win_call(win, function()
-		vim.cmd(string.format("normal! %dG %s", line, direction == "top" and "zt" or "zb"))
+		if direction == "top" then
+			vim.cmd(string.format("normal! %dG zt", line))
+		else
+			vim.cmd(string.format("normal! %dG zb", line))
+		end
 	end)
 end
 
@@ -181,7 +185,7 @@ function M.toggle()
 	else
 		M.enable()
 	end
-	vim.notify(vim.format("**Scroll Sync** %s", state.enabled and "enabled" or "disabled"))
+	vim.notify(string.format("**Scroll Sync** %s", state.enabled and "enabled" or "disabled"))
 end
 
 function M.setup(opts)
