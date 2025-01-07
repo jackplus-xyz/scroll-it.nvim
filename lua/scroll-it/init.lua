@@ -1,17 +1,11 @@
 local M = {}
+M.config = require("scroll-it.config")
 
 local state = {
 	sync_group = vim.api.nvim_create_augroup("ScrollSync", { clear = true }),
 	scroll_group = vim.api.nvim_create_augroup("ScrollSyncScroll", { clear = true }),
 	enabled = false,
 	buf = {},
-}
-
-M.config = {
-	enabled = false,
-	reversed = false,
-	hide_line_number = "others",
-	overlap_lines = 0,
 }
 
 local function is_valid_win(win)
@@ -47,8 +41,8 @@ local function buf_get_sorted_wins(buf)
 	return result
 end
 
-local function get_base_line(win, from)
-	return vim.fn.line(from == "top" and "w0" or "w$", win)
+local function get_base_line(win, position)
+	return vim.fn.line(position == "top" and "w0" or "w$", win)
 end
 
 local function win_scroll_to_line(win, line, direction)
@@ -62,7 +56,6 @@ local function win_scroll_to_line(win, line, direction)
 end
 
 local function align_wins(wins, start_idx, end_idx)
-	local config = M.config
 	local iter_dir = end_idx > start_idx and 1 or -1
 	local start = start_idx
 	local finish = end_idx
@@ -71,11 +64,11 @@ local function align_wins(wins, start_idx, end_idx)
 		local win = wins[start]
 		local scrolloff = vim.api.nvim_get_option_value("scrolloff", { win = win })
 		scrolloff = scrolloff == -1 and vim.go.scrolloff or scrolloff
-		local offset = 1 + scrolloff - config.overlap_lines
+		local offset = 1 + scrolloff - M.config.options.overlap_lines
 
 		if start ~= start_idx then
 			local ref_win = wins[start - iter_dir]
-			if config.reversed then
+			if M.config.options.reversed then
 				local new_line = get_base_line(ref_win, iter_dir > 0 and "top" or "bottom")
 					+ (iter_dir > 0 and -offset or offset)
 				win_scroll_to_line(win, new_line, iter_dir > 0 and "bottom" or "top")
@@ -86,11 +79,10 @@ local function align_wins(wins, start_idx, end_idx)
 			end
 		end
 
-		local is_set_line_number = config.hide_line_number == "all"
-		if config.hide_line_number == "others" and start == start_idx then
+		local is_set_line_number = M.config.options.hide_line_number == "all"
+		if M.config.options.hide_line_number == "others" and start == start_idx then
 			is_set_line_number = true
 		end
-		-- Set line numbers based on configuration
 		vim.api.nvim_set_option_value("number", is_set_line_number, { win = win })
 
 		start = start + iter_dir
@@ -125,7 +117,7 @@ local function buf_update_wins(buf)
 
 	local last_idx = #sorted_wins
 	if curr_win_idx == 1 or curr_win_idx == last_idx then
-		if M.config.reversed then
+		if M.config.options.reversed then
 			if curr_win_idx == last_idx then
 				align_wins(sorted_wins, last_idx, 1)
 			else
@@ -193,9 +185,7 @@ function M.toggle()
 end
 
 function M.setup(opts)
-	if opts then
-		M.config = vim.tbl_deep_extend("force", M.config, opts)
-	end
+	M.config.setup(opts)
 
 	local commands = {
 		ScrollItEnable = { M.enable, "Enable scroll synchronization" },
@@ -221,7 +211,7 @@ function M.setup(opts)
 		callback = handle_scroll,
 	})
 
-	if M.config.enabled then
+	if M.config.options.enabled then
 		M.enable()
 	end
 end
