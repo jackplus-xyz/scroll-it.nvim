@@ -6,6 +6,7 @@ local state = {
 	scroll_group = vim.api.nvim_create_augroup("ScrollSyncScroll", { clear = true }),
 	enabled = false,
 	buf = {},
+	original_settings = nil,
 }
 
 local function is_valid_win(win)
@@ -51,8 +52,17 @@ local function win_scroll_to_line(win, line, direction)
 	end
 
 	vim.api.nvim_win_call(win, function()
-		vim.cmd(string.format("normal! %dG %s", line, direction == "top" and "zt" or "zb"))
+		if direction == "top" then
+			vim.cmd(string.format("normal! %dG zt", line))
+		else
+			vim.cmd(string.format("normal! %dG zb", line))
+		end
 	end)
+end
+
+local function set_line_number(win, is_set_line_number)
+	vim.api.nvim_set_option_value("number", is_set_line_number, { win = win })
+	vim.api.nvim_set_option_value("relativenumber", is_set_line_number, { win = win })
 end
 
 local function align_wins(wins, start_idx, end_idx)
@@ -83,7 +93,8 @@ local function align_wins(wins, start_idx, end_idx)
 		if M.config.options.hide_line_number == "others" and start == start_idx then
 			is_set_line_number = true
 		end
-		vim.api.nvim_set_option_value("number", is_set_line_number, { win = win })
+
+		set_line_number(win, is_set_line_number)
 
 		start = start + iter_dir
 	end
@@ -173,6 +184,15 @@ function M.disable()
 		state.scroll_timer:stop()
 		state.scroll_timer = nil
 	end
+
+	if state.original_settings then
+		for _, win in ipairs(vim.api.nvim_list_wins()) do
+			if is_valid_win(win) then
+				vim.api.nvim_set_option_value("number", state.original_settings.number, { win = win })
+				vim.api.nvim_set_option_value("relativenumber", state.original_settings.relativenumber, { win = win })
+			end
+		end
+	end
 end
 
 function M.toggle()
@@ -181,10 +201,14 @@ function M.toggle()
 	else
 		M.enable()
 	end
-	vim.notify(vim.format("**Scroll Sync** %s", state.enabled and "enabled" or "disabled"))
+	vim.notify(string.format("**Scroll Sync** %s", state.enabled and "enabled" or "disabled"))
 end
 
 function M.setup(opts)
+	state.original_settings = {
+		number = vim.o.number,
+		relativenumber = vim.o.relativenumber,
+	}
 	M.config.setup(opts)
 
 	local commands = {
@@ -212,7 +236,7 @@ function M.setup(opts)
 	})
 
 	if M.config.options.enabled then
-		M.enable()
+		vim.defer_fn(M.enable, 100)
 	end
 end
 
