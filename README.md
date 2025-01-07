@@ -43,6 +43,24 @@ Using [lazy.nvim](https://github.com/folke/lazy.nvim):
 }
 ```
 
+**Example configuration with `lazy.nvim`:**
+
+```lua
+require("lazy").setup({
+    {
+        "jackplus-xyz/scroll-it.nvim",
+        lazy = false,                  -- Set to `true` to lazy-load the plugin, or `false` to load it on startup
+        opts = {
+            enabled = true,            -- Activates the plugin's functionality after it is loaded
+                                       -- (Note: This does NOT determine whether the plugin is lazy-loaded)
+            reversed = true,           -- Reverse the content extending direction
+            hide_line_number = "all",  -- Show line numbers in all windows
+            overlap_lines = 4,         -- Number of lines to overlap between adjacent windows for better readability
+        },
+    },
+})
+```
+
 ## Usage
 
 The plugin provides the following commands:
