@@ -7,7 +7,7 @@ A Neovim plugin for continuous scrolling across multiple windows, ideal for comp
 https://github.com/user-attachments/assets/6d5a560a-7773-445c-84cf-f2cb681819ca
 
 
-Features
+## Features
 
  - Automatic Scroll Sync: Keeps scrolling synchronized across all windows displaying the same buffer.
  - Configurable Overlap: Define the number of overlapping lines between adjacent windows.
