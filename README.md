@@ -2,6 +2,11 @@
 
 A Neovim plugin for continuous scrolling across multiple windows, ideal for comparing different sections of the same file. Perfectly suited for ultrawide monitors, enabling comfortable viewing of multiple vertical splits of a long document.
 
+## Demo
+
+https://github.com/user-attachments/assets/6d5a560a-7773-445c-84cf-f2cb681819ca
+
+
 Features
 
  - Automatic Scroll Sync: Keeps scrolling synchronized across all windows displaying the same buffer.
