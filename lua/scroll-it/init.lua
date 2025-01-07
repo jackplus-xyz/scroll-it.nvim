@@ -6,6 +6,7 @@ local state = {
 	scroll_group = vim.api.nvim_create_augroup("ScrollSyncScroll", { clear = true }),
 	enabled = false,
 	buf = {},
+	original_settings = nil,
 }
 
 local function is_valid_win(win)
@@ -59,6 +60,11 @@ local function win_scroll_to_line(win, line, direction)
 	end)
 end
 
+local function set_line_number(win, is_set_line_number)
+	vim.api.nvim_set_option_value("number", is_set_line_number, { win = win })
+	vim.api.nvim_set_option_value("relativenumber", is_set_line_number, { win = win })
+end
+
 local function align_wins(wins, start_idx, end_idx)
 	local iter_dir = end_idx > start_idx and 1 or -1
 	local start = start_idx
@@ -87,7 +93,8 @@ local function align_wins(wins, start_idx, end_idx)
 		if M.config.options.hide_line_number == "others" and start == start_idx then
 			is_set_line_number = true
 		end
-		vim.api.nvim_set_option_value("number", is_set_line_number, { win = win })
+
+		set_line_number(win, is_set_line_number)
 
 		start = start + iter_dir
 	end
@@ -177,6 +184,15 @@ function M.disable()
 		state.scroll_timer:stop()
 		state.scroll_timer = nil
 	end
+
+	if state.original_settings then
+		for _, win in ipairs(vim.api.nvim_list_wins()) do
+			if is_valid_win(win) then
+				vim.api.nvim_set_option_value("number", state.original_settings.number, { win = win })
+				vim.api.nvim_set_option_value("relativenumber", state.original_settings.relativenumber, { win = win })
+			end
+		end
+	end
 end
 
 function M.toggle()
@@ -189,6 +205,10 @@ function M.toggle()
 end
 
 function M.setup(opts)
+	state.original_settings = {
+		number = vim.o.number,
+		relativenumber = vim.o.relativenumber,
+	}
 	M.config.setup(opts)
 
 	local commands = {
