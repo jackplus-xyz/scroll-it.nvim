@@ -6,6 +6,18 @@ local function is_valid_win(win)
 	return win and vim.api.nvim_win_is_valid(win)
 end
 
+local function is_legal_win(win, buf)
+	if not is_valid_win(win) then
+		return false
+	end
+
+	local win_config = vim.api.nvim_win_get_config(win)
+	if win_config.style == "minimal" or not win_config.focusable then
+		return false
+	end
+
+	return vim.api.nvim_win_get_buf(win) == buf
+end
 local function is_valid_buf(buf)
 	return buf and vim.api.nvim_buf_is_valid(buf)
 end
@@ -13,7 +25,7 @@ end
 local function buf_get_sorted_wins(buf)
 	local wins = {}
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		if is_valid_win(win) and vim.api.nvim_win_get_buf(win) == buf then
+		if is_legal_win(win, buf) then
 			local pos = vim.api.nvim_win_get_position(win)
 			wins[#wins + 1] = {
 				win = win,
