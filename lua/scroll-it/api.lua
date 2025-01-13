@@ -25,7 +25,7 @@ function M.toggle()
 	else
 		M.enable()
 	end
-	vim.notify(string.format("**Scroll Sync** %s", State.enabled and "enabled" or "disabled"))
+	vim.notify(string.format("**ScrollIt** %s", State.enabled and "enabled" or "disabled"))
 end
 
 return M
