@@ -18,7 +18,7 @@ function M.setup(options)
 
 	vim.api.nvim_create_user_command("ScrollItEnable", Api.enable, { desc = "Enable scroll synchronization" })
 	vim.api.nvim_create_user_command("ScrollItDisable", Api.disable, { desc = "Disable scroll synchronization" })
-	vim.api.nvim_create_user_command("ScrollItToggle", Api.toggle, { desc = "Disable scroll synchronization" })
+	vim.api.nvim_create_user_command("ScrollItToggle", Api.toggle, { desc = "Toggle scroll synchronization" })
 
 	vim.api.nvim_create_autocmd({ "WinEnter", "BufWinEnter", "WinNew", "WinClosed" }, {
 		group = State.sync_group,
