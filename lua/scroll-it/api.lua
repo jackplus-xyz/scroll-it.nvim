@@ -4,7 +4,7 @@ local M = {}
 
 function M.enable()
 	State.enabled = true
-	Utils.buf_update_wins(vim.api.nvim_get_current_buf())
+	Utils.sync_wins()
 end
 
 function M.disable()
