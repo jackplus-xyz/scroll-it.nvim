@@ -6,26 +6,66 @@ local function is_valid_win(win)
 	return win and vim.api.nvim_win_is_valid(win)
 end
 
-local function is_legal_win(win, buf)
-	if not is_valid_win(win) then
-		return false
-	end
-
-	local win_config = vim.api.nvim_win_get_config(win)
-	if win_config.style == "minimal" or not win_config.focusable then
-		return false
-	end
-
-	return vim.api.nvim_win_get_buf(win) == buf
-end
 local function is_valid_buf(buf)
 	return buf and vim.api.nvim_buf_is_valid(buf)
 end
 
-local function buf_get_sorted_wins(buf)
+local function is_valid_win_configs(win_config_1, win_config_2)
+	if not win_config_1 or not win_config_2 then
+		return
+	end
+
+	if not win_config_1.focusable or not win_config_2.focusable then
+		return
+	end
+
+	if win_config_1.style and win_config_1.style == "minimal" then
+		return
+	end
+
+	if win_config_2.style and win_config_2.style == "minimal" then
+		return
+	end
+
+	if win_config_1.zindex and win_config_2.zindex then
+		return win_config_1.zindex == win_config_2.zindex
+	end
+
+	return true
+end
+
+local function is_valid_wins(win_1, win_2)
+	if not is_valid_win(win_1) or not is_valid_win(win_2) then
+		return
+	end
+
+	if win_1 == win_2 then
+		return true
+	end
+
+	local buf_1 = vim.api.nvim_win_get_buf(win_1)
+	if not is_valid_buf(buf_1) then
+		return false
+	end
+
+	local buf_2 = vim.api.nvim_win_get_buf(win_2)
+	if not is_valid_buf(buf_2) then
+		return false
+	end
+
+	if buf_1 ~= buf_2 then
+		return false
+	end
+
+	return is_valid_win_configs(vim.api.nvim_win_get_config(win_1), vim.api.nvim_win_get_config(win_2))
+end
+
+local function get_sorted_wins(cur_win)
+	cur_win = cur_win or vim.api.nvim_get_current_win()
 	local wins = {}
+
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
-		if is_legal_win(win, buf) then
+		if is_valid_wins(cur_win, win) then
 			local pos = vim.api.nvim_win_get_position(win)
 			wins[#wins + 1] = {
 				win = win,
@@ -102,6 +142,7 @@ local function align_wins(wins, start_idx, end_idx)
 	end
 end
 
+-- TODO: omit when start up
 function M.restore_wins_settings(original_settings)
 	local wins = vim.api.nvim_list_wins()
 	for _, win in ipairs(wins) do
@@ -112,17 +153,17 @@ function M.restore_wins_settings(original_settings)
 	end
 end
 
-function M.buf_update_wins(buf)
-	if not is_valid_buf(buf) then
+function M.sync_wins()
+	local curr_win = vim.api.nvim_get_current_win()
+	if not is_valid_win(curr_win) then
 		return
 	end
 
-	local sorted_wins = buf_get_sorted_wins(buf)
+	local sorted_wins = get_sorted_wins(curr_win)
 	if #sorted_wins <= 1 then
 		return
 	end
 
-	local curr_win = vim.api.nvim_get_current_win()
 	local curr_win_idx = 1
 	for i, win in ipairs(sorted_wins) do
 		if win == curr_win then
@@ -160,19 +201,9 @@ function M.handle_scroll()
 
 	State.scroll_timer = vim.defer_fn(function()
 		if State.enabled then
-			local curr_buf = vim.api.nvim_get_current_buf()
-			if is_valid_buf(curr_buf) then
-				local sorted_wins = buf_get_sorted_wins(curr_buf)
-				if #sorted_wins > 1 then
-					local curr_win = vim.api.nvim_get_current_win()
-					-- Only update if we're in a window showing the current buffer
-					for _, win in ipairs(sorted_wins) do
-						if win == curr_win then
-							M.buf_update_wins(curr_buf)
-							break
-						end
-					end
-				end
+			local curr_win = vim.api.nvim_get_current_win()
+			if is_valid_win(curr_win) then
+				M.sync_wins()
 			end
 		end
 		State.scroll_timer = nil
